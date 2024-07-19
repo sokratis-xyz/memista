@@ -1,0 +1,30 @@
+[package]
+name = "memista"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.0"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+futures = "0.3"
+anyhow = "1.0"
+sha2 = "0.10.6"
+tch = "0.10.1"
+tokio = { version = "1.38.0", features = ["full"] }
+rayon = "1.8"
+log = "0.4.6"
+env_logger = "0.6.1"
+usearch = "2.12.0"
+apistos = { version="0.2", features = ["extras", "qs_query", "rapidoc", "redoc", "scalar", "swagger-ui"] }
+schemars = { package = "apistos-schemars", version = "0.8", features = ["chrono", "uuid1", "url", "rust_decimal"] }
+async-sqlite = "0.2.2"
+
+[dependencies.uuid]
+version = "1.9.0"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
