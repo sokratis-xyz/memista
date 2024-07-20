@@ -14,6 +14,9 @@ use apistos::web::{post, delete, resource, scope};
 use apistos::{RapidocConfig, RedocConfig, ScalarConfig, SwaggerUIConfig};
 use schemars::JsonSchema;
 
+use log::{debug, info, warn};
+
+
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ApiComponent)]
 struct ChunkData {
     embedding: Vec<f32>,
@@ -68,13 +71,13 @@ async fn ensure_table_exists(db_pool: &Pool, database_id: &str) -> Result<(), ac
 fn load_or_create_index(database_id: &str) -> Result<Index, actix_web::Error> {
     let index_file = format!("{}.usearch", database_id);
     let options = IndexOptions {
-        dimensions: 100,
+        dimensions: 2,
         metric: MetricKind::IP,
         quantization: ScalarKind::F32,
         connectivity: 0,
         expansion_add: 0,
         expansion_search: 0,
-        multi: false,
+        multi: true,
     };
     let index: Index = new_index(&options).map_err(actix_web::error::ErrorInternalServerError)?;
     
@@ -91,10 +94,18 @@ async fn insert_chunk(
     request: web::Json<InsertChunkRequest>,
 ) -> actix_web::Result<HttpResponse> {
 
+    log::debug!("Loading index");
+
     let mut index = load_or_create_index(&request.database_id)?;
+
+    index.reserve(request.chunks.len() + index.size()).map_err(actix_web::error::ErrorInternalServerError)?;
+
+    log::debug!("Loaded index {}", &request.database_id);
 
     ensure_table_exists(&app_state.db_pool, &request.database_id).await?;
 
+    log::debug!("Ensured table exists {}", &request.database_id);
+    
     let table_name = format!("chunks_{}", request.database_id);
 
     let mut inserted_ids = Vec::new();
@@ -103,6 +114,7 @@ async fn insert_chunk(
         let chunk = chunk.clone();
         let table_name = table_name.clone();
 
+        log::debug!("inserting into database");
         let chunk_id: i64 = app_state.db_pool.conn(move |conn| {
             conn.query_row(
                 &format!("INSERT INTO {} (text, metadata) VALUES (?, ?) RETURNING chunk_id", table_name),
@@ -110,8 +122,11 @@ async fn insert_chunk(
                 |row| row.get(0),
             )
         }).await.map_err(actix_web::error::ErrorInternalServerError)?;
+        
+        log::debug!("inserting into vector index");
 
         index.add(chunk_id as u64, &chunk.embedding).map_err(actix_web::error::ErrorInternalServerError)?;
+
         inserted_ids.push(chunk_id);
     }
 
@@ -186,6 +201,8 @@ async fn drop_table(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let db_pool = PoolBuilder::new()
         .path("memista.db")
         .journal_mode(JournalMode::Wal)

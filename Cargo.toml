@@ -16,7 +16,7 @@ tokio = { version = "1.38.0", features = ["full"] }
 rayon = "1.8"
 log = "0.4.6"
 env_logger = "0.6.1"
-usearch = "2.12.0"
+usearch = { version = "2.12.0", features = ["simsimd", "fp16lib"] }
 apistos = { version="0.2", features = ["extras", "qs_query", "rapidoc", "redoc", "scalar", "swagger-ui"] }
 schemars = { package = "apistos-schemars", version = "0.8", features = ["chrono", "uuid1", "url", "rust_decimal"] }
 async-sqlite = "0.2.2"
