@@ -13,6 +13,8 @@ use apistos::spec::Spec;
 use apistos::web::{post, delete, resource, scope};
 use apistos::{RapidocConfig, RedocConfig, ScalarConfig, SwaggerUIConfig};
 use schemars::JsonSchema;
+use dotenv::dotenv;
+use std::env;
 
 use log::{debug, info, warn};
 
@@ -199,12 +201,42 @@ async fn drop_table(
     Ok(HttpResponse::Ok().json(json!({"status": "success", "message": "Table and index dropped successfully"})))
 }
 
+#[derive(Debug, Clone)]
+struct Config {
+    database_path: String,
+    server_host: String,
+    server_port: u16,
+    log_level: String,
+}
+
+impl Config {
+    fn from_env() -> Result<Self, env::VarError> {
+        Ok(Config {
+            database_path: env::var("DATABASE_PATH").unwrap_or_else(|_| "memista.db".to_string()),
+            server_host: env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
+            server_port: env::var("SERVER_PORT")
+                .unwrap_or_else(|_| "8083".to_string())
+                .parse()
+                .expect("SERVER_PORT must be a number"),
+            log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+        })
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Load .env file
+    dotenv().ok();
+    
+    // Load configuration
+    let config = Config::from_env().expect("Failed to load configuration");
+    
+    // Initialize logger with configured level
+    std::env::set_var("RUST_LOG", &config.log_level);
     env_logger::init();
-
+    
     let db_pool = PoolBuilder::new()
-        .path("memista.db")
+        .path(&config.database_path)
         .journal_mode(JournalMode::Wal)
         .open()
         .await
@@ -214,6 +246,10 @@ async fn main() -> std::io::Result<()> {
         db_pool,
     });
 
+    let bind_address = format!("{}:{}", config.server_host, config.server_port);
+    
+    info!("Starting server on {}", bind_address);
+    
     HttpServer::new(move || {
         let spec = Spec {
             info: Info {
@@ -245,7 +281,7 @@ async fn main() -> std::io::Result<()> {
                     .with(SwaggerUIConfig::new(&"/swagger")),
             )
     })
-    .bind("127.0.0.1:8083")?
+    .bind(bind_address)?
     .run()
     .await
 }
